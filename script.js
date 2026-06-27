@@ -1,12 +1,133 @@
 
-
+# Updated script.js with full localStorage auth system
 script_js = '''// ============================================
 // PROBANK - Complete JavaScript
-// Interactions & Animations
+// Interactions, Animations & Local Auth System
+// ============================================
+
+// ============================================
+// AUTH SYSTEM - LocalStorage Based
+// ============================================
+
+const AUTH_KEY = 'probank_users';
+const CURRENT_USER_KEY = 'probank_current_user';
+
+// Initialize default admin user
+function initAuth() {
+    const users = getUsers();
+    if (users.length === 0) {
+        // Create default admin
+        const adminUser = {
+            id: 'USR-001',
+            firstName: 'مدير',
+            lastName: 'النظام',
+            email: 'admin@probank.com',
+            phone: '+966500000000',
+            password: 'admin123',
+            role: 'admin',
+            status: 'active',
+            avatar: 'https://ui-avatars.com/api/?name=Admin+User&background=ef4444&color=fff',
+            createdAt: new Date().toISOString(),
+            balance: 50000,
+            investments: []
+        };
+        saveUser(adminUser);
+        
+        // Create default investor
+        const investorUser = {
+            id: 'USR-002',
+            firstName: 'أحمد',
+            lastName: 'محمد',
+            email: 'ahmed@probank.com',
+            phone: '+966501234567',
+            password: '123456',
+            role: 'investor',
+            status: 'active',
+            avatar: 'https://ui-avatars.com/api/?name=Ahmed+Mohamed&background=0ea5e9&color=fff',
+            createdAt: new Date().toISOString(),
+            balance: 45250,
+            investments: [
+                { name: 'صندوق العقارات السكنية', amount: 15000, return: 14.5 },
+                { name: 'صندوق الطاقة المتجددة', amount: 10000, return: 16.2 },
+                { name: 'صندوق التكنولوجيا الناشئة', amount: 10000, return: 20 }
+            ]
+        };
+        saveUser(investorUser);
+    }
+}
+
+function getUsers() {
+    const data = localStorage.getItem(AUTH_KEY);
+    return data ? JSON.parse(data) : [];
+}
+
+function saveUser(user) {
+    const users = getUsers();
+    const existingIndex = users.findIndex(u => u.email === user.email);
+    if (existingIndex >= 0) {
+        users[existingIndex] = user;
+    } else {
+        users.push(user);
+    }
+    localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+}
+
+function getUserByEmail(email) {
+    const users = getUsers();
+    return users.find(u => u.email === email);
+}
+
+function getCurrentUser() {
+    const data = localStorage.getItem(CURRENT_USER_KEY);
+    return data ? JSON.parse(data) : null;
+}
+
+function setCurrentUser(user) {
+    if (user) {
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+    } else {
+        localStorage.removeItem(CURRENT_USER_KEY);
+    }
+}
+
+function logout() {
+    setCurrentUser(null);
+    window.location.href = 'login.html';
+}
+
+function isLoggedIn() {
+    return getCurrentUser() !== null;
+}
+
+function requireAuth() {
+    if (!isLoggedIn()) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    return true;
+}
+
+function requireAdmin() {
+    const user = getCurrentUser();
+    if (!user || user.role !== 'admin') {
+        window.location.href = 'dashboard.html';
+        return false;
+    }
+    return true;
+}
+
+function generateUserId() {
+    const users = getUsers();
+    const nextNum = users.length + 1;
+    return 'USR-' + String(nextNum).padStart(3, '0');
+}
+
+// ============================================
+// UI COMPONENTS
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize all components
+    initAuth();
     initParticles();
     initSidebar();
     initThemeToggle();
@@ -16,7 +137,96 @@ document.addEventListener('DOMContentLoaded', function() {
     initToastNotifications();
     initPasswordToggle();
     initMobileMenu();
+    initUserDropdown();
+    updateUserUI();
 });
+
+// Update UI with current user info
+function updateUserUI() {
+    const user = getCurrentUser();
+    if (!user) return;
+    
+    // Update sidebar user info
+    const sidebarUserName = document.querySelector('.sidebar-footer .user-name');
+    const sidebarUserRole = document.querySelector('.sidebar-footer .user-role');
+    const sidebarAvatar = document.querySelector('.sidebar-footer .user-avatar');
+    const topBarAvatar = document.querySelector('.top-bar .user-avatar');
+    
+    if (sidebarUserName) sidebarUserName.textContent = user.firstName + ' ' + user.lastName;
+    if (sidebarUserRole) sidebarUserRole.textContent = user.role === 'admin' ? 'مسؤول' : 'مستثمر';
+    if (sidebarAvatar) sidebarAvatar.src = user.avatar;
+    if (topBarAvatar) topBarAvatar.src = user.avatar;
+    
+    // Update balance displays
+    const balanceElements = document.querySelectorAll('[data-balance]');
+    balanceElements.forEach(el => {
+        el.textContent = '$' + (user.balance || 0).toLocaleString();
+    });
+}
+
+// User dropdown with logout
+function initUserDropdown() {
+    const dropdown = document.querySelector('.user-dropdown');
+    if (!dropdown) return;
+    
+    dropdown.addEventListener('click', function(e) {
+        e.stopPropagation();
+        
+        // Remove existing menu
+        const existing = document.querySelector('.user-dropdown-menu');
+        if (existing) {
+            existing.remove();
+            return;
+        }
+        
+        const user = getCurrentUser();
+        if (!user) return;
+        
+        const menu = document.createElement('div');
+        menu.className = 'user-dropdown-menu';
+        menu.style.cssText = `
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 8px;
+            min-width: 200px;
+            z-index: 1000;
+            box-shadow: var(--shadow-lg);
+        `;
+        menu.innerHTML = `
+            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px;">
+                <div style="font-weight: 700;">${user.firstName} ${user.lastName}</div>
+                <div style="font-size: 12px; color: var(--text-muted);">${user.email}</div>
+            </div>
+            <a href="settings.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--text-secondary); transition: var(--transition);">
+                <i class="fas fa-cog"></i> الإعدادات
+            </a>
+            <a href="profile.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--text-secondary); transition: var(--transition);">
+                <i class="fas fa-user"></i> الملف الشخصي
+            </a>
+            <div style="border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 8px;">
+                <button onclick="logout()" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--danger); background: none; border: none; width: 100%; cursor: pointer; font-family: inherit;">
+                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(menu);
+        
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 10);
+    });
+}
 
 // Particles Background
 function initParticles() {
@@ -51,12 +261,9 @@ function initSidebar() {
     
     toggle.addEventListener('click', function() {
         sidebar.classList.toggle('collapsed');
-        
-        // Save state
         localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
     });
     
-    // Restore state
     if (localStorage.getItem('sidebarCollapsed') === 'true') {
         sidebar.classList.add('collapsed');
     }
@@ -82,7 +289,6 @@ function initThemeToggle() {
         }
     });
     
-    // Restore theme
     if (localStorage.getItem('theme') === 'light') {
         document.body.classList.add('light-theme');
         const icon = themeToggle.querySelector('i');
@@ -101,11 +307,9 @@ function initSettingsTabs() {
         item.addEventListener('click', function() {
             const tabId = this.getAttribute('data-tab');
             
-            // Remove active from all
             navItems.forEach(nav => nav.classList.remove('active'));
             document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
             
-            // Add active to clicked
             this.classList.add('active');
             const targetTab = document.getElementById(tabId + '-tab');
             if (targetTab) {
@@ -117,7 +321,7 @@ function initSettingsTabs() {
 
 // Scroll Reveal Animation
 function initScrollReveal() {
-    const revealElements = document.querySelectorAll('.stat-card, .content-card, .feature-card, .investment-card');
+    const revealElements = document.querySelectorAll('.stat-card, .content-card, .feature-card, .investment-card, .course-card');
     
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
@@ -168,7 +372,6 @@ function init3DCard() {
 
 // Toast Notifications
 function initToastNotifications() {
-    // Create toast container if not exists
     if (!document.querySelector('.toast-container')) {
         const container = document.createElement('div');
         container.className = 'toast-container';
@@ -186,7 +389,8 @@ function showToast(message, type = 'success', duration = 3000) {
     const icons = {
         success: 'fa-check-circle',
         error: 'fa-times-circle',
-        warning: 'fa-exclamation-triangle'
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
     };
     
     toast.innerHTML = `
@@ -230,7 +434,6 @@ function initMobileMenu() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
     
-    // Create mobile overlay
     const overlay = document.createElement('div');
     overlay.className = 'mobile-overlay';
     overlay.style.cssText = `
@@ -250,7 +453,6 @@ function initMobileMenu() {
         overlay.style.display = 'none';
     });
     
-    // Mobile toggle button
     const mobileToggle = document.createElement('button');
     mobileToggle.className = 'mobile-menu-btn';
     mobileToggle.innerHTML = '<i class="fas fa-bars"></i>';
@@ -277,7 +479,6 @@ function initMobileMenu() {
         overlay.style.display = sidebar.classList.contains('active') ? 'block' : 'none';
     });
     
-    // Show mobile button on small screens
     const mediaQuery = window.matchMedia('(max-width: 1024px)');
     function handleMediaChange(e) {
         mobileToggle.style.display = e.matches ? 'flex' : 'none';
@@ -313,74 +514,6 @@ document.addEventListener('click', function(e) {
         e.target.classList.remove('active');
     }
 });
-
-// Form Submissions
-document.addEventListener('submit', function(e) {
-    const form = e.target;
-    
-    if (form.closest('.modal-form') || form.closest('.settings-form')) {
-        e.preventDefault();
-        showToast('تم حفظ التغييرات بنجاح!', 'success');
-    }
-});
-
-// Register Steps
-let currentStep = 1;
-const totalSteps = 3;
-
-function nextStep() {
-    if (currentStep < totalSteps) {
-        document.getElementById(`step-${currentStep}`).style.display = 'none';
-        currentStep++;
-        document.getElementById(`step-${currentStep}`).style.display = 'block';
-        updateStepsIndicator();
-    }
-}
-
-function prevStep() {
-    if (currentStep > 1) {
-        document.getElementById(`step-${currentStep}`).style.display = 'none';
-        currentStep--;
-        document.getElementById(`step-${currentStep}`).style.display = 'block';
-        updateStepsIndicator();
-    }
-}
-
-function updateStepsIndicator() {
-    const steps = document.querySelectorAll('.step');
-    const lines = document.querySelectorAll('.step-line');
-    
-    steps.forEach((step, index) => {
-        step.classList.remove('active', 'completed');
-        if (index + 1 < currentStep) {
-            step.classList.add('completed');
-        } else if (index + 1 === currentStep) {
-            step.classList.add('active');
-        }
-    });
-    
-    lines.forEach((line, index) => {
-        line.classList.remove('completed');
-        if (index + 1 < currentStep) {
-            line.classList.add('completed');
-        }
-    });
-}
-
-// Investment Calculator
-function calculateInvestment() {
-    const amount = parseFloat(document.getElementById('investAmount')?.value) || 0;
-    const rate = parseFloat(document.getElementById('investRate')?.value) || 0;
-    const period = parseInt(document.getElementById('investPeriod')?.value) || 0;
-    
-    if (amount && rate && period) {
-        const profit = amount * (rate / 100) * (period / 12);
-        const total = amount + profit;
-        
-        document.getElementById('calculatedProfit').textContent = '$' + profit.toFixed(2);
-        document.getElementById('calculatedTotal').textContent = '$' + total.toFixed(2);
-    }
-}
 
 // Chart.js Defaults for Dark Theme
 if (typeof Chart !== 'undefined') {
@@ -419,13 +552,6 @@ function copyToClipboard(text) {
     }).catch(() => {
         showToast('فشل النسخ!', 'error');
     });
-}
-
-// Confirm Action
-function confirmAction(message, callback) {
-    if (confirm(message)) {
-        callback();
-    }
 }
 
 // Number Formatting
@@ -518,5 +644,5 @@ window.addEventListener('offline', () => {
 with open('/mnt/agents/output/script.js', 'w', encoding='utf-8') as f:
     f.write(script_js)
 
-print("✅ script.js created successfully!")
+print("✅ script.js updated with full auth system!")
 print(f"Size: {len(script_js)} characters")
